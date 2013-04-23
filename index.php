@@ -10,8 +10,8 @@
 	 * xml or json.
 	 **/
 
-	// set up the simple dom object
-	require_once 'pinterest.php';
+	require_once 'lib/pinterest.php';
+	require_once 'lib/utility.php';
 
 	// get the parameters that have been passed in
 	$params = array();
@@ -39,43 +39,28 @@
 			break;
 		case "xml":
 			header('Content-Type: text/xml; charset=utf8');
-			$xml = new SimpleXMLElement('<root/>');
-			array_walk_recursive($result, array ($xml, 'addChild'));
-			print $xml->asXML();
+
+			// convert object to array
+			$array = objectToArray($result);
+			//echo "<pre>".print_r($array,true)."</pre>";
+
+			// create XML element
+			$xml = new SimpleXMLElement("<root/>");
+			array_to_xml($array,$xml);
+
+			// output XML
+			$dom = new DOMDocument('1.0');
+			$dom->preserveWhiteSpace = false;
+			$dom->formatOutput = true;
+			$dom->loadXML($xml->asXML());
+			echo $dom->saveXML();
+
 			break;
 		case "json":
 		default:
 			header('Content-Type: application/json; charset=utf8');
-			echo json_pretty(json_encode($result));
+			//echo "<pre>".print_r($result)."</pre>";
+			echo json_format(json_encode($result));
 			break;
-	}
-
-	/*
-	 * Utility Functions for Prettier Output
-	 */
-	function json_pretty($json, $html = false) {
-		$out = ''; $nl = "\n"; $cnt = 0; $tab = 4; $len = strlen($json); $space = ' ';
-		if($html) {
-			$space = '&nbsp;';
-			$nl = '<br/>';
-		}
-		$k = strlen($space)?strlen($space):1;
-		for ($i=0; $i<=$len; $i++) {
-			$char = substr($json, $i, 1);
-			if($char == '}' || $char == ']') {
-				$cnt --;
-				$out .= $nl . str_pad('', ($tab * $cnt * $k), $space);
-			} else if($char == '{' || $char == '[') {
-				$cnt ++;
-			}
-			$out .= $char;
-			if($char == ',' || $char == '{' || $char == '[') {
-				$out .= $nl . str_pad('', ($tab * $cnt * $k), $space);
-			}
-			if($char == ':') {
-				$out .= ' ';
-			}
-		}
-		return $out;
 	}
 ?>
