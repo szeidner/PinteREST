@@ -1,13 +1,20 @@
 <?php
 	/**
 	 * Pinterest Class
-     *
+	 *
 	 * This class depends on Simple HMTL DOM
 	 **/
 
 	require_once 'simple_html_dom.php';
 
 	class Pinterest {
+		// initialize error codes
+		public static $errorCodes = array(
+			10001 => "'user' is a required parameter",
+			10002 => "'boards' was not formatted properly",
+			404 => "User or board URL does not exist.",
+		);
+
 		/**
 		 * Constructor Function
 		 * @params = Array of parameters
@@ -23,15 +30,10 @@
 			}
 
 			// initialize response object
-			$this->response = (object) array(
-				'status'=>'',
-				'message'=>'',
-				'data'=> array()
-			);
+			$this->response = (object) array();
 
 			// set up the simple dom object
 			$this->html = new simple_html_dom();
-
 
 		}
 
@@ -50,8 +52,7 @@
 		public function get() {
 			// Case where user was not defined
 			if (is_null($this->user)) {
-				$this->response->status = "ERROR";
-				$this->response->message = "'user' is a required parameter";
+				$this->error(10001);
 			}
 			// Case where boards was not defined, so let's get all of the user's pins
 			elseif (is_null($this->boards)) {
@@ -63,8 +64,7 @@
 			}
 			// There was an error with the format of boards
 			else {
-				$this->response->status = "ERROR";
-				$this->response->message = "'boards' was not formatted properly";
+				$this->error(10002);
 			}
 
 			return $this->response;
@@ -81,7 +81,14 @@
 			$pagenum = 1;
 			$pins = array();
 			do {
-				$html = file_get_html("http://pinterest.com/$this->user/pins/?lazy=1&page=$pagenum");
+				// check to make sure the url is valid
+				$url = "http://pinterest.com/$this->user/pins/?lazy=1&page=$pagenum";
+				if (!$this->urlExists($url)) {
+					$this->error(404);
+					break;
+				}
+
+				$html = file_get_html($url);
 
 				// break if last page
 				if(!$html->find('div[class=pin]')) {
@@ -106,7 +113,7 @@
 
 			} while ( ($pincount < $this->limit) || ($this->limit == 0) );
 
-			$this->response->data = $pins;
+			$this->response->pins = $pins;
 		}
 
 		/**
@@ -121,7 +128,15 @@
 				$pagenum = 1;
 				$pins = array();
 				do {
-					$html = file_get_html("http://pinterest.com/$this->user/$board/?lazy=1&page=$pagenum");
+					// check to make sure the url is valid
+					$url = "http://pinterest.com/$this->user/$board/?lazy=1&page=$pagenum";
+					if (!$this->urlExists($url)) {
+						$this->error(404);
+						break;
+					}
+
+					// get contents of the url
+					$html = file_get_html($url);
 
 					// break if last page
 					if(!$html->find('div[class=pin]')) {
@@ -146,9 +161,10 @@
 
 				} while ( ($pincount < $this->limit) || ($this->limit == 0) );
 
-				$board_contents['boardName'] = $board;
-				$board_contents['pins'] = $pins;
-				$this->response->data[] = $board_contents;
+				$board_contents = (object) array();
+				$board_contents->name = $board;
+				$board_contents->pins = $pins;
+				$this->response->boards[] = $board_contents;
 			}
 		}
 
@@ -184,6 +200,35 @@
 			$item['comments'] = intval(preg_replace("/[^0-9,.]/", '', trim($pin->find('.stats .CommentsCount',0)->plaintext)));
 
 			return $item;
+		}
+
+		/**
+		 * urlExists
+		 * @url = A URL to test
+		 * Return boolean to determine a URLs existence
+		 **/
+		private function urlExists($url){
+			if ((strpos($url, "http")) === false) $url = "http://" . $url;
+			$headers = get_headers($url);
+			if (is_array(@get_headers($url)) && $headers[0] == 'HTTP/1.1 200 OK')
+				 return true;
+			else
+				 return false;
+		}
+
+		/**
+		 * error
+		 * @code = numeric error code
+		 * Add error to response object
+		 **/
+		private function error($code) {
+			// create error object
+			$error = (object) array(
+				"message" => self::$errorCodes[$code],
+				"code" => $code
+			);
+			// add to response
+			$this->response->errors[] = $error;
 		}
 
 	}
